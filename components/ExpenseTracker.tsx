@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 type Category =
   | "Comida"
@@ -21,14 +21,8 @@ interface Expense {
 }
 
 const CATEGORIES: Category[] = [
-  "Comida",
-  "Transporte",
-  "Entretenimiento",
-  "Salud",
-  "Hogar",
-  "Ropa",
-  "Educación",
-  "Otro",
+  "Comida", "Transporte", "Entretenimiento", "Salud",
+  "Hogar", "Ropa", "Educación", "Otro",
 ];
 
 const CATEGORY_COLORS: Record<Category, string> = {
@@ -71,21 +65,28 @@ function formatDate(dateStr: string): string {
   });
 }
 
-const INITIAL_EXPENSES: Expense[] = [
-  { id: "1", description: "Almuerzo en el trabajo", amount: 3500, category: "Comida", date: "2026-03-01" },
-  { id: "2", description: "SUBE", amount: 1200, category: "Transporte", date: "2026-03-02" },
-  { id: "3", description: "Netflix", amount: 4999, category: "Entretenimiento", date: "2026-03-02" },
-  { id: "4", description: "Farmacia", amount: 8750, category: "Salud", date: "2026-03-03" },
-];
+const STORAGE_KEY = "expense-tracker-gastos";
+
+function loadExpenses(): Expense[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Expense[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 type ModalMode = "add" | "stats" | null;
 
 export default function ExpenseTracker() {
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+  const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  }, [expenses]);
   const [modal, setModal] = useState<ModalMode>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  // Form state
   const [form, setForm] = useState({
     description: "",
     amount: "",
@@ -102,485 +103,126 @@ export default function ExpenseTracker() {
       map[e.category] = (map[e.category] ?? 0) + e.amount;
     }
     return Object.entries(map)
-      .sort(([, a], [, b]) => b - a)
-      .map(([cat, amount]) => ({ cat: cat as Category, amount, pct: total > 0 ? (amount / total) * 100 : 0 }));
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .map(([cat, amount]) => ({
+        cat: cat as Category,
+        amount: amount as number,
+        pct: total > 0 ? ((amount as number) / total) * 100 : 0,
+      }));
   }, [expenses, total]);
 
-  const handleAddExpense = () => {
+  const handleAdd = () => {
     if (!form.description.trim()) { setFormError("Ingresá una descripción"); return; }
     const parsed = parseFloat(form.amount.replace(",", "."));
     if (!form.amount || isNaN(parsed) || parsed <= 0) { setFormError("Ingresá un monto válido"); return; }
-
-    const newExpense: Expense = {
+    setExpenses(prev => [{
       id: Date.now().toString(),
       description: form.description.trim(),
       amount: parsed,
       category: form.category,
       date: form.date,
-    };
-    setExpenses(prev => [newExpense, ...prev]);
+    }, ...prev]);
     setForm({ description: "", amount: "", category: "Comida", date: new Date().toISOString().split("T")[0] });
     setFormError("");
     setModal(null);
   };
 
-  const handleDelete = (id: string) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    setDeleteId(null);
-  };
-
   const sorted = [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const s = {
+    page: { backgroundColor: "#F7F6F2", minHeight: "100vh", fontFamily: "system-ui, -apple-system, sans-serif" } as React.CSSProperties,
+    container: { maxWidth: 430, margin: "0 auto", minHeight: "100vh", backgroundColor: "#F7F6F2", display: "flex", flexDirection: "column" as const },
+    headerWrap: { padding: "52px 24px 0", textAlign: "center" as const },
+    eyebrow: { fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#9BA3AF", marginBottom: 8 },
+    monthLabel: { fontSize: 14, color: "#6B7280", marginBottom: 20 },
+    totalCard: { backgroundColor: "#1A1A1A", borderRadius: 28, padding: "36px 28px", margin: "0 4px", position: "relative" as const, overflow: "hidden" },
+    totalEyebrow: { fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.4)", marginBottom: 10 },
+    totalAmount: { fontSize: 44, fontWeight: 300, color: "#fff", lineHeight: 1, letterSpacing: "-2px" },
+    totalCount: { marginTop: 14, fontSize: 12, color: "rgba(255,255,255,0.35)" },
+    actions: { display: "flex", gap: 10, padding: "20px 28px 0" },
+    btnPrimary: { flex: 1, border: "none", borderRadius: 16, padding: "16px 12px", fontFamily: "inherit", fontSize: 14, fontWeight: 500, cursor: "pointer", backgroundColor: "#1A1A1A", color: "#fff", boxShadow: "0 4px 14px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 } as React.CSSProperties,
+    btnSecondary: { flex: 1, border: "1.5px solid #EBEBEB", borderRadius: 16, padding: "16px 12px", fontFamily: "inherit", fontSize: 14, fontWeight: 500, cursor: "pointer", backgroundColor: "#fff", color: "#1A1A1A", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 } as React.CSSProperties,
+    listSection: { flex: 1, padding: "28px 28px 48px" },
+    listHeader: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 },
+    overlay: { position: "fixed" as const, inset: 0, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" },
+    sheet: { backgroundColor: "#fff", borderRadius: "28px 28px 0 0", width: "100%", maxWidth: 430, padding: "28px 24px 48px" },
+    handle: { width: 36, height: 4, backgroundColor: "#E5E7EB", borderRadius: 2, margin: "0 auto 24px" },
+    sheetTitle: { fontSize: 22, fontWeight: 300, marginBottom: 22, color: "#1A1A1A", letterSpacing: "-0.5px" },
+    fieldLabel: { display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#6B7280", marginBottom: 6 },
+    input: { width: "100%", padding: "14px 16px", border: "1.5px solid #E5E7EB", borderRadius: 14, fontFamily: "inherit", fontSize: 15, color: "#1A1A1A", backgroundColor: "#FAFAFA", outline: "none", boxSizing: "border-box" as const },
+    catGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 },
+    btnFull: { width: "100%", padding: 16, backgroundColor: "#1A1A1A", color: "#fff", border: "none", borderRadius: 16, fontFamily: "inherit", fontSize: 15, fontWeight: 500, cursor: "pointer", marginTop: 4 },
+  };
+
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap');
+    <div style={s.page}>
+      <div style={s.container}>
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-          font-family: 'DM Sans', sans-serif;
-          background: #F7F6F2;
-          color: #1A1A1A;
-          min-height: 100vh;
-        }
-
-        .app {
-          max-width: 430px;
-          margin: 0 auto;
-          min-height: 100vh;
-          background: #F7F6F2;
-          display: flex;
-          flex-direction: column;
-        }
-
-        /* ── HEADER ── */
-        .header {
-          padding: 56px 24px 0;
-          text-align: center;
-        }
-        .header-label {
-          font-size: 11px;
-          font-weight: 500;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          color: #9BA3AF;
-          margin-bottom: 8px;
-        }
-        .header-month {
-          font-family: 'DM Serif Display', serif;
-          font-size: 15px;
-          color: #6B7280;
-          margin-bottom: 20px;
-        }
-        .total-card {
-          background: #1A1A1A;
-          border-radius: 28px;
-          padding: 36px 28px;
-          margin: 0 4px;
-          position: relative;
-          overflow: hidden;
-        }
-        .total-card::before {
-          content: '';
-          position: absolute;
-          top: -40px; right: -40px;
-          width: 160px; height: 160px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.04);
-        }
-        .total-card::after {
-          content: '';
-          position: absolute;
-          bottom: -20px; left: -20px;
-          width: 100px; height: 100px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.03);
-        }
-        .total-label {
-          font-size: 11px;
-          font-weight: 500;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: rgba(255,255,255,0.4);
-          margin-bottom: 10px;
-        }
-        .total-amount {
-          font-family: 'DM Serif Display', serif;
-          font-size: 46px;
-          color: #fff;
-          line-height: 1;
-          letter-spacing: -1px;
-        }
-        .total-count {
-          margin-top: 14px;
-          font-size: 12px;
-          color: rgba(255,255,255,0.35);
-        }
-
-        /* ── BUTTONS ── */
-        .actions {
-          display: flex;
-          gap: 10px;
-          padding: 20px 28px 0;
-        }
-        .btn {
-          flex: 1;
-          border: none;
-          border-radius: 16px;
-          padding: 16px 12px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: transform 0.12s, box-shadow 0.12s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-        }
-        .btn:active { transform: scale(0.97); }
-        .btn-primary {
-          background: #1A1A1A;
-          color: #fff;
-          box-shadow: 0 4px 14px rgba(0,0,0,0.15);
-        }
-        .btn-primary:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
-        .btn-secondary {
-          background: #fff;
-          color: #1A1A1A;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-          border: 1px solid #EBEBEB;
-        }
-        .btn-secondary:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-
-        /* ── LIST ── */
-        .list-section {
-          flex: 1;
-          padding: 28px 28px 40px;
-        }
-        .list-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-          margin-bottom: 16px;
-        }
-        .list-title {
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          color: #1A1A1A;
-        }
-        .list-subtitle {
-          font-size: 11px;
-          color: #9BA3AF;
-        }
-
-        .expense-list { display: flex; flex-direction: column; gap: 10px; }
-
-        .expense-item {
-          background: #fff;
-          border-radius: 18px;
-          padding: 16px;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-          border: 1px solid #F0F0F0;
-          transition: transform 0.1s;
-          position: relative;
-        }
-        .expense-item:active { transform: scale(0.99); }
-
-        .expense-icon {
-          width: 44px; height: 44px;
-          border-radius: 14px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 20px;
-          flex-shrink: 0;
-        }
-        .expense-info { flex: 1; min-width: 0; }
-        .expense-desc {
-          font-size: 14px;
-          font-weight: 500;
-          color: #1A1A1A;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .expense-meta {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-top: 3px;
-        }
-        .expense-cat {
-          font-size: 11px;
-          font-weight: 500;
-          padding: 2px 8px;
-          border-radius: 20px;
-        }
-        .expense-date {
-          font-size: 11px;
-          color: #9BA3AF;
-        }
-        .expense-amount {
-          font-size: 15px;
-          font-weight: 600;
-          color: #1A1A1A;
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
-        .delete-btn {
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #D1D5DB;
-          font-size: 16px;
-          padding: 0 0 0 8px;
-          flex-shrink: 0;
-          transition: color 0.15s;
-        }
-        .delete-btn:hover { color: #EF4444; }
-
-        .empty-state {
-          text-align: center;
-          padding: 48px 0;
-          color: #9BA3AF;
-          font-size: 14px;
-        }
-        .empty-icon { font-size: 40px; margin-bottom: 12px; }
-
-        /* ── MODAL OVERLAY ── */
-        .overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.35);
-          backdrop-filter: blur(4px);
-          z-index: 100;
-          display: flex;
-          align-items: flex-end;
-          justify-content: center;
-          animation: fadeIn 0.2s ease;
-        }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        .sheet {
-          background: #fff;
-          border-radius: 28px 28px 0 0;
-          width: 100%;
-          max-width: 430px;
-          padding: 28px 24px 48px;
-          animation: slideUp 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
-        }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-        .sheet-handle {
-          width: 36px; height: 4px;
-          background: #E5E7EB;
-          border-radius: 2px;
-          margin: 0 auto 24px;
-        }
-        .sheet-title {
-          font-family: 'DM Serif Display', serif;
-          font-size: 22px;
-          margin-bottom: 22px;
-          color: #1A1A1A;
-        }
-
-        /* ── FORM ── */
-        .field { margin-bottom: 16px; }
-        .field label {
-          display: block;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: #6B7280;
-          margin-bottom: 6px;
-        }
-        .field input, .field select {
-          width: 100%;
-          padding: 14px 16px;
-          border: 1.5px solid #E5E7EB;
-          border-radius: 14px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 15px;
-          color: #1A1A1A;
-          background: #FAFAFA;
-          outline: none;
-          transition: border-color 0.15s;
-          appearance: none;
-        }
-        .field input:focus, .field select:focus { border-color: #1A1A1A; background: #fff; }
-
-        .cat-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-        }
-        .cat-btn {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 4px;
-          padding: 10px 4px;
-          border-radius: 14px;
-          border: 1.5px solid #E5E7EB;
-          background: #FAFAFA;
-          cursor: pointer;
-          transition: all 0.15s;
-          font-family: 'DM Sans', sans-serif;
-        }
-        .cat-btn span:first-child { font-size: 20px; }
-        .cat-btn span:last-child { font-size: 10px; font-weight: 500; color: #6B7280; }
-        .cat-btn.selected { border-width: 2px; }
-        .cat-btn:not(.selected):hover { background: #F3F4F6; }
-
-        .form-error {
-          font-size: 12px;
-          color: #EF4444;
-          margin-bottom: 12px;
-        }
-        .btn-full {
-          width: 100%;
-          padding: 16px;
-          background: #1A1A1A;
-          color: #fff;
-          border: none;
-          border-radius: 16px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 15px;
-          font-weight: 500;
-          cursor: pointer;
-          margin-top: 8px;
-          transition: opacity 0.15s;
-        }
-        .btn-full:hover { opacity: 0.88; }
-
-        /* ── STATS ── */
-        .stats-list { display: flex; flex-direction: column; gap: 14px; }
-        .stat-row { display: flex; flex-direction: column; gap: 6px; }
-        .stat-info {
-          display: flex; justify-content: space-between; align-items: center;
-        }
-        .stat-cat {
-          display: flex; align-items: center; gap: 8px;
-          font-size: 14px; font-weight: 500;
-        }
-        .stat-dot {
-          width: 10px; height: 10px; border-radius: 50%;
-          flex-shrink: 0;
-        }
-        .stat-amount { font-size: 14px; font-weight: 600; color: #1A1A1A; }
-        .stat-bar-bg {
-          height: 6px;
-          background: #F0F0F0;
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        .stat-bar {
-          height: 100%;
-          border-radius: 3px;
-          transition: width 0.6s cubic-bezier(0.34, 1.1, 0.64, 1);
-        }
-        .stat-pct { font-size: 11px; color: #9BA3AF; }
-
-        /* ── CONFIRM DELETE ── */
-        .confirm-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.4);
-          z-index: 200;
-          display: flex; align-items: center; justify-content: center;
-          padding: 24px;
-          animation: fadeIn 0.15s ease;
-        }
-        .confirm-box {
-          background: #fff;
-          border-radius: 24px;
-          padding: 28px 24px;
-          width: 100%;
-          max-width: 320px;
-          text-align: center;
-          animation: popIn 0.2s cubic-bezier(0.34, 1.3, 0.64, 1);
-        }
-        @keyframes popIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .confirm-box h3 { font-family: 'DM Serif Display', serif; font-size: 20px; margin-bottom: 8px; }
-        .confirm-box p { font-size: 13px; color: #6B7280; margin-bottom: 22px; }
-        .confirm-actions { display: flex; gap: 10px; }
-        .btn-cancel {
-          flex: 1; padding: 13px; border-radius: 14px; border: 1.5px solid #E5E7EB;
-          background: #fff; font-family: 'DM Sans', sans-serif; font-size: 14px;
-          font-weight: 500; cursor: pointer; color: #6B7280;
-        }
-        .btn-delete {
-          flex: 1; padding: 13px; border-radius: 14px; border: none;
-          background: #EF4444; font-family: 'DM Sans', sans-serif; font-size: 14px;
-          font-weight: 500; cursor: pointer; color: #fff;
-        }
-      `}</style>
-
-      <div className="app">
-        {/* ── HEADER / TOTAL ── */}
-        <div className="header">
-          <p className="header-label">Mis Gastos</p>
-          <p className="header-month">
+        {/* HEADER */}
+        <div style={s.headerWrap}>
+          <p style={s.eyebrow}>Mis Gastos</p>
+          <p style={s.monthLabel}>
             {new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
           </p>
-          <div className="total-card">
-            <p className="total-label">Total gastado</p>
-            <p className="total-amount">{formatARS(total)}</p>
-            <p className="total-count">{expenses.length} {expenses.length === 1 ? "gasto registrado" : "gastos registrados"}</p>
+          <div style={s.totalCard}>
+            {/* Círculos decorativos */}
+            <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.05)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: -20, left: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: "30%", right: 40, width: 60, height: 60, borderRadius: "50%", background: "rgba(255,255,255,0.03)", pointerEvents: "none" }} />
+            <p style={s.totalEyebrow}>Total gastado</p>
+            <p style={s.totalAmount}>{formatARS(total)}</p>
+            <p style={s.totalCount}>
+              {expenses.length} {expenses.length === 1 ? "gasto registrado" : "gastos registrados"}
+            </p>
           </div>
         </div>
 
-        {/* ── ACTIONS ── */}
-        <div className="actions">
-          <button className="btn btn-primary" onClick={() => { setFormError(""); setModal("add"); }}>
-            <span>+</span> Nuevo gasto
+        {/* BUTTONS */}
+        <div style={s.actions}>
+          <button style={s.btnPrimary} onClick={() => { setFormError(""); setModal("add"); }}>
+            + Nuevo gasto
           </button>
-          <button className="btn btn-secondary" onClick={() => setModal("stats")}>
-            <span>📊</span> Resumen
+          <button style={s.btnSecondary} onClick={() => setModal("stats")}>
+            📊 Resumen
           </button>
         </div>
 
-        {/* ── EXPENSE LIST ── */}
-        <div className="list-section">
-          <div className="list-header">
-            <span className="list-title">HISTORIAL</span>
-            <span className="list-subtitle">{sorted.length} items</span>
+        {/* LIST */}
+        <div style={s.listSection}>
+          <div style={s.listHeader}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#1A1A1A" }}>HISTORIAL</span>
+            <span style={{ fontSize: 11, color: "#9BA3AF" }}>{sorted.length} items</span>
           </div>
 
           {sorted.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">🧾</div>
-              <p>No hay gastos todavía.</p>
-              <p>¡Agregá el primero!</p>
+            <div style={{ textAlign: "center", padding: "48px 0", color: "#9BA3AF" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
+              <p style={{ fontSize: 14 }}>No hay gastos todavía. ¡Agregá el primero!</p>
             </div>
           ) : (
-            <div className="expense-list">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {sorted.map(expense => (
-                <div className="expense-item" key={expense.id}>
-                  <div
-                    className="expense-icon"
-                    style={{ background: CATEGORY_COLORS[expense.category] + "18" }}
-                  >
+                <div key={expense.id} style={{ backgroundColor: "#fff", borderRadius: 18, padding: 16, display: "flex", alignItems: "center", gap: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.05)", border: "1px solid #F0F0F0" }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, backgroundColor: CATEGORY_COLORS[expense.category] + "18" }}>
                     {CATEGORY_ICONS[expense.category]}
                   </div>
-                  <div className="expense-info">
-                    <div className="expense-desc">{expense.description}</div>
-                    <div className="expense-meta">
-                      <span
-                        className="expense-cat"
-                        style={{
-                          background: CATEGORY_COLORS[expense.category] + "18",
-                          color: CATEGORY_COLORS[expense.category],
-                        }}
-                      >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {expense.description}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 20, backgroundColor: CATEGORY_COLORS[expense.category] + "18", color: CATEGORY_COLORS[expense.category] }}>
                         {expense.category}
                       </span>
-                      <span className="expense-date">{formatDate(expense.date)}</span>
+                      <span style={{ fontSize: 11, color: "#9BA3AF" }}>{formatDate(expense.date)}</span>
                     </div>
                   </div>
-                  <span className="expense-amount">{formatARS(expense.amount)}</span>
-                  <button className="delete-btn" onClick={() => setDeleteId(expense.id)}>✕</button>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {formatARS(expense.amount)}
+                  </span>
+                  <button onClick={() => setDeleteId(expense.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#D1D5DB", fontSize: 14, padding: "0 0 0 6px", flexShrink: 0 }}>
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
@@ -588,106 +230,72 @@ export default function ExpenseTracker() {
         </div>
       </div>
 
-      {/* ── MODAL: ADD EXPENSE ── */}
+      {/* MODAL ADD */}
       {modal === "add" && (
-        <div className="overlay" onClick={() => setModal(null)}>
-          <div className="sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle" />
-            <p className="sheet-title">Nuevo gasto</p>
+        <div style={s.overlay} onClick={() => setModal(null)}>
+          <div style={s.sheet} onClick={e => e.stopPropagation()}>
+            <div style={s.handle} />
+            <p style={s.sheetTitle}>Nuevo gasto</p>
 
-            <div className="field">
-              <label>Descripción</label>
-              <input
-                type="text"
-                placeholder="Ej: Almuerzo, SUBE, etc."
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                autoFocus
-              />
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.fieldLabel}>Descripción</label>
+              <input autoFocus style={s.input} type="text" placeholder="Ej: Almuerzo, SUBE, etc." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             </div>
-
-            <div className="field">
-              <label>Monto (ARS)</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="0"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              />
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.fieldLabel}>Monto (ARS $)</label>
+              <input style={s.input} type="number" inputMode="decimal" placeholder="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
             </div>
-
-            <div className="field">
-              <label>Fecha</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              />
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.fieldLabel}>Fecha</label>
+              <input style={s.input} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
-
-            <div className="field">
-              <label>Categoría</label>
-              <div className="cat-grid">
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.fieldLabel}>Categoría</label>
+              <div style={s.catGrid}>
                 {CATEGORIES.map(cat => (
-                  <button
-                    key={cat}
-                    className={`cat-btn${form.category === cat ? " selected" : ""}`}
-                    style={form.category === cat ? {
-                      borderColor: CATEGORY_COLORS[cat],
-                      background: CATEGORY_COLORS[cat] + "15",
-                    } : {}}
-                    onClick={() => setForm(f => ({ ...f, category: cat }))}
-                  >
-                    <span>{CATEGORY_ICONS[cat]}</span>
-                    <span style={form.category === cat ? { color: CATEGORY_COLORS[cat] } : {}}>{cat}</span>
+                  <button key={cat} onClick={() => setForm(f => ({ ...f, category: cat }))} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "10px 4px", borderRadius: 14, cursor: "pointer", fontFamily: "inherit", border: form.category === cat ? `2px solid ${CATEGORY_COLORS[cat]}` : "1.5px solid #E5E7EB", backgroundColor: form.category === cat ? CATEGORY_COLORS[cat] + "15" : "#FAFAFA" }}>
+                    <span style={{ fontSize: 20 }}>{CATEGORY_ICONS[cat]}</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: form.category === cat ? CATEGORY_COLORS[cat] : "#6B7280" }}>{cat}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {formError && <p className="form-error">{formError}</p>}
-
-            <button className="btn-full" onClick={handleAddExpense}>
-              Guardar gasto
-            </button>
+            {formError && <p style={{ fontSize: 12, color: "#EF4444", marginBottom: 12 }}>{formError}</p>}
+            <button style={s.btnFull} onClick={handleAdd}>Guardar gasto</button>
           </div>
         </div>
       )}
 
-      {/* ── MODAL: STATS ── */}
+      {/* MODAL STATS */}
       {modal === "stats" && (
-        <div className="overlay" onClick={() => setModal(null)}>
-          <div className="sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle" />
-            <p className="sheet-title">Resumen por categoría</p>
-
+        <div style={s.overlay} onClick={() => setModal(null)}>
+          <div style={s.sheet} onClick={e => e.stopPropagation()}>
+            <div style={s.handle} />
+            <p style={s.sheetTitle}>Resumen por categoría</p>
             {byCategory.length === 0 ? (
               <p style={{ color: "#9BA3AF", fontSize: 14 }}>No hay datos aún.</p>
             ) : (
-              <div className="stats-list">
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {byCategory.map(({ cat, amount, pct }) => (
-                  <div className="stat-row" key={cat}>
-                    <div className="stat-info">
-                      <span className="stat-cat">
-                        <span className="stat-dot" style={{ background: CATEGORY_COLORS[cat] }} />
+                  <div key={cat}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: CATEGORY_COLORS[cat], flexShrink: 0, display: "inline-block" }} />
                         {CATEGORY_ICONS[cat]} {cat}
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span className="stat-pct">{pct.toFixed(0)}%</span>
-                        <span className="stat-amount">{formatARS(amount)}</span>
+                        <span style={{ fontSize: 11, color: "#9BA3AF" }}>{pct.toFixed(0)}%</span>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{formatARS(amount)}</span>
                       </span>
                     </div>
-                    <div className="stat-bar-bg">
-                      <div
-                        className="stat-bar"
-                        style={{ width: `${pct}%`, background: CATEGORY_COLORS[cat] }}
-                      />
+                    <div style={{ height: 6, backgroundColor: "#F0F0F0", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, backgroundColor: CATEGORY_COLORS[cat], borderRadius: 3 }} />
                     </div>
                   </div>
                 ))}
-                <div style={{ borderTop: "1.5px solid #F0F0F0", paddingTop: 14, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>TOTAL</span>
+                <div style={{ borderTop: "1.5px solid #F0F0F0", paddingTop: 14, display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", letterSpacing: "0.06em" }}>TOTAL</span>
                   <span style={{ fontSize: 15, fontWeight: 700, color: "#1A1A1A" }}>{formatARS(total)}</span>
                 </div>
               </div>
@@ -696,19 +304,23 @@ export default function ExpenseTracker() {
         </div>
       )}
 
-      {/* ── CONFIRM DELETE ── */}
+      {/* CONFIRM DELETE */}
       {deleteId && (
-        <div className="confirm-overlay" onClick={() => setDeleteId(null)}>
-          <div className="confirm-box" onClick={e => e.stopPropagation()}>
-            <h3>Eliminar gasto</h3>
-            <p>¿Estás seguro? Esta acción no se puede deshacer.</p>
-            <div className="confirm-actions">
-              <button className="btn-cancel" onClick={() => setDeleteId(null)}>Cancelar</button>
-              <button className="btn-delete" onClick={() => handleDelete(deleteId)}>Eliminar</button>
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setDeleteId(null)}>
+          <div style={{ backgroundColor: "#fff", borderRadius: 24, padding: "28px 24px", width: "100%", maxWidth: 320, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 20, fontWeight: 400, marginBottom: 8 }}>Eliminar gasto</h3>
+            <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 22 }}>¿Estás seguro? Esta acción no se puede deshacer.</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setDeleteId(null)} style={{ flex: 1, padding: 13, borderRadius: 14, border: "1.5px solid #E5E7EB", backgroundColor: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 500, cursor: "pointer", color: "#6B7280" }}>
+                Cancelar
+              </button>
+              <button onClick={() => { setExpenses(prev => prev.filter(e => e.id !== deleteId)); setDeleteId(null); }} style={{ flex: 1, padding: 13, borderRadius: 14, border: "none", backgroundColor: "#EF4444", fontFamily: "inherit", fontSize: 14, fontWeight: 500, cursor: "pointer", color: "#fff" }}>
+                Eliminar
+              </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
